@@ -1,6 +1,6 @@
 {
   "name": "mb-cliente",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Cliente não oficial, em Node.js, da API de Integração MultBovinos (BI e ERP): autenticação com relogin, fila de fazenda, paginação segura, erros tipados e parse do formato BR.",
   "keywords": [

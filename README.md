@@ -125,7 +125,7 @@ A fazenda selecionada é **estado do servidor, por usuário**: se duas operaçõ
 
 - `mb.connect()` e `mb.selectProperty()`;
 - `erp.custos.*` com `propertyId` (selecionam a fazenda e fazem o POST na mesma seção);
-- `erp.estoque.getRelatorioGestaoNutricionalLote()` e `reprocessRelatorioGestaoNutricionalLote()` (sempre selecionam a fazenda do `propertyId` e fazem o POST na mesma seção);
+- `erp.estoque.getRelatorioGestaoNutricionalLote()`, `reprocessRelatorioGestaoNutricionalLinha()` e `reprocessRelatorioGestaoNutricionalLote()` (sempre selecionam a fazenda do `propertyId` e fazem o POST na mesma seção);
 - `bi.animais.getAll()`, `bi.movEstoque.getAll()` e `mb.forAllProperties()`;
 - os `get()` por fazenda do BI com `propertyId` (`bi.animais`, `bi.movEstoque`, `bi.movMateriais`, `bi.suplementacao`, `bi.producaoRacao`);
 - uma página de grid ERP com `propertyId` **diferente** da fazenda já selecionada (seleção e leitura na mesma seção).
@@ -670,15 +670,23 @@ await mb.erp.estoque.getDefinicaoDiariaTratos({ from, to }) // filtra por data d
 await mb.erp.estoque.getProducaoDietas() // batidas de produção de dieta
 await mb.erp.estoque.getRelatorioGestaoNutricionalLote({ propertyId, date: '2026-06-30' })
 // relatório "Gestão Nutricional" por lote/curral — mesma tela/dados do
-// relatório do MBWEB. Endpoint adicional, fora dos manuais oficiais. Só
-// currais de confinamento com lote ativo; `date` é exigido mas ignorado
-// pelo servidor (sempre devolve o último dia fechado). Seleciona a fazenda
+// relatório do MBWEB. Endpoint adicional, fora dos manuais oficiais. Devolve
+// o resultado da última busca feita na fazenda: `date` e os filtros são ignorados,
+// e o campo `filtro` diz de que busca o resultado veio. Seleciona a fazenda
 // do propertyId na seção exclusiva da fila. Aceita timeoutMs e signal. Ver docs/api.md.
 
-// Recálculo do mesmo relatório para uma data, num curral só. GRAVA num cache
-// compartilhado (muda a tela de todos os usuários da fazenda), leva minutos e
-// falha com frequência. Também seleciona a fazenda na seção exclusiva.
-// Ver docs/api.md antes de usar.
+// Recálculo do mesmo relatório para uma data, numa linha de confinamento inteira.
+// GRAVA num cache compartilhado: o resultado substitui o cache inteiro da fazenda e
+// muda a tela de todos os usuários. Leva minutos e falha com frequência. Também
+// seleciona a fazenda na seção exclusiva. Ver docs/api.md antes de usar.
+await mb.erp.estoque.reprocessRelatorioGestaoNutricionalLinha({
+  propertyId,
+  date: '2026-06-29',
+  linhaConfinamento,
+})
+
+// O mesmo, num curral só. Recalcular vários lotes em sequência deixa só o último no
+// cache: para mais de um curral, use o recálculo por linha.
 await mb.erp.estoque.reprocessRelatorioGestaoNutricionalLote({
   propertyId,
   date: '2026-06-29',
@@ -930,6 +938,7 @@ O `timeoutMs` do construtor vale para toda a instância. Para trocar o prazo de 
 | Métodos do BI (`get({ timeoutMs })`, `getFormulacao(id, { timeoutMs })`) | O da instância                                                                 |
 | `erp.custos.*`                                                           | 300 s, independente da instância                                               |
 | `getRelatorioGestaoNutricionalLote`                                      | O da instância                                                                 |
+| `reprocessRelatorioGestaoNutricionalLinha`                               | 600 s                                                                          |
 | `reprocessRelatorioGestaoNutricionalLote`                                | 600 s                                                                          |
 | `mb.raw.get`/`post` (terceiro argumento)                                 | O da instância                                                                 |
 
@@ -1128,8 +1137,9 @@ Status: ✅ funciona · ⚠️ funciona com ressalva · 🔕 só traz dados se o
 | `erp.animais.getConfinamento`                             | —                                                                                                                                                                      | ✅ por fazenda, filtro pela abertura do lote; páginas pesadas · ✅ `getConfinamentoById(id)`                                             |
 | `erp.cadastros`                                           | `getEntidades/getContatosMaoDeObra/getLocalizacoes/getCurrais/getGruposCurral/getCategoriasGta/getSequenciasMicroregioes/getConfiguracoesLayout/getDispositivosMoveis` | ✅ (9 endpoints)                                                                                                                         |
 | `erp.estoque`                                             | `getTransferenciasPropriedade/getTransferenciasLoteAlimentar/getTransferenciasLoteFinalidade/getProgramasNutricionais/getProducaoDietas`                               | ✅                                                                                                                                       |
-| `erp.estoque`                                             | `getRelatorioGestaoNutricionalLote`                                                                                                                                    | ✅ mas `date` ignorado (sempre último dia fechado); só currais de confinamento                                                           |
-| `erp.estoque`                                             | `reprocessRelatorioGestaoNutricionalLote`                                                                                                                              | ⚠️ escrita: recalcula um curral para a data; grava no cache compartilhado; lento e instável                                              |
+| `erp.estoque`                                             | `getRelatorioGestaoNutricionalLote`                                                                                                                                    | ⚠️ devolve a última busca da fazenda; `date` e filtros ignorados                                                                         |
+| `erp.estoque`                                             | `reprocessRelatorioGestaoNutricionalLinha`                                                                                                                             | ⚠️ escrita: recalcula a linha para a data; substitui o cache da fazenda; lento e instável                                                |
+| `erp.estoque`                                             | `reprocessRelatorioGestaoNutricionalLote`                                                                                                                              | ⚠️ escrita: recalcula um curral para a data; substitui o cache da fazenda; lento e instável                                              |
 | `erp.estoque.getTratosDiariosPrevistos`                   | —                                                                                                                                                                      | ✅ (from/to não testado ainda)                                                                                                           |
 | `erp.estoque.getDefinicaoDiariaTratos`                    | com `from`/`to`                                                                                                                                                        | ✅ com data                                                                                                                              |
 | `erp.animais.getInventariosAnimais`                       | —                                                                                                                                                                      | ✅                                                                                                                                       |

@@ -6,6 +6,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
+### Adicionado
+
+- `erp.estoque.reprocessRelatorioGestaoNutricionalLinha()`: recalcula o relatório de Gestão Nutricional de uma linha de confinamento inteira em uma chamada, como a tela do MBWEB, com a mesma recusa de `allowedLines`.
+
+### Corrigido
+
+- Documentação do relatório de Gestão Nutricional: a consulta devolve o resultado da última busca feita na fazenda, pela tela ou por recálculo, e ignora a data e os filtros. Ela não é um cálculo diário do servidor. O recálculo por lote também substitui o cache inteiro da fazenda, então recalcular vários lotes em sequência deixa só o último.
+
 ## [0.2.0] - 2026-10-30
 
 ### Adicionado

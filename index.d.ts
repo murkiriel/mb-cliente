@@ -1029,12 +1029,26 @@ export interface RelatorioGestaoNutricionalLoteParams extends CallTimeout {
   signal?: AbortSignal
 }
 
+/** Recálculo do relatório de Gestão Nutricional para uma data, numa linha de confinamento inteira. */
+export interface ReprocessRelatorioGestaoNutricionalLinhaOptions {
+  propertyId: number
+  /** YYYY-MM-DD. Diferente da consulta, o recálculo respeita a data. */
+  date: string
+  /** A linha de confinamento. Nunca uma linha de pasto: o recálculo em pasto é proibido, e o cliente não tem como saber o tipo da linha. */
+  linhaConfinamento: number
+  /** Ids das linhas de confinamento da fazenda: quando passado, `linhaConfinamento` fora da lista lança ValidationError antes de qualquer chamada. */
+  allowedLines?: number[]
+  /** Prazo só desta chamada. Padrão 600000 (10 min). */
+  timeoutMs?: number
+  signal?: AbortSignal
+}
+
 /** Recálculo do relatório de Gestão Nutricional para uma data, num curral só. */
 export interface ReprocessRelatorioGestaoNutricionalLoteOptions {
   propertyId: number
   /** YYYY-MM-DD. Diferente da consulta, o recálculo respeita a data. */
   date: string
-  /** Um lote de confinamento (não aceita lista: sem filtro de curral o recálculo pega a fazenda inteira). */
+  /** Um lote de confinamento. Lista não é aceita: para mais de um curral, use o recálculo por linha. */
   loteConfinamento: number
   /** A linha de confinamento do mesmo curral. Nunca uma linha de pasto: o recálculo em pasto é proibido, e o cliente não tem como saber o tipo da linha. */
   linhaConfinamento: number
@@ -1200,16 +1214,32 @@ export interface EstoqueErp {
   getProducaoDietas(params?: FetchPageOptions): Promise<ErpPageResult>
   /**
    * Relatório "Gestão Nutricional" por lote/curral — mesma tela/dados do relatório do MBWEB.
-   * Endpoint adicional, não documentado pela API oficial. Só cobre currais de
-   * confinamento com lote ativo (não pasto). `date` é exigido mas ignorado pelo servidor.
+   * Endpoint adicional, não documentado pela API oficial. Devolve o resultado da última
+   * busca feita na fazenda, pela tela ou por recálculo: `date` é exigido mas ignorado, os
+   * filtros também, e o resultado pode ser de um dia antigo, de uma linha de pasto ou de
+   * um curral só. `filtro` diz de que busca o resultado veio.
    */
   getRelatorioGestaoNutricionalLote(
     params: RelatorioGestaoNutricionalLoteParams
   ): Promise<RelatorioGestaoNutricionalLoteResult>
   /**
-   * Recalcula o relatório para `date` num curral só (`reprocessar: true`).
-   * ⚠️ Grava num cache compartilhado do MBWEB: muda a tela de Gestão Nutricional
-   * de todos os usuários da fazenda. Lento (1,5 a 5 min) e instável: o servidor
+   * Recalcula o relatório para `date` numa linha de confinamento inteira (`reprocessar: true`).
+   * ⚠️ Grava num cache compartilhado do MBWEB: o resultado substitui o cache inteiro da
+   * fazenda e muda a tela de Gestão Nutricional de todos os usuários. Lento (minutos) e
+   * instável: o servidor costuma cortar a consulta por volta de 300 s. TimeoutError/NetworkError
+   * trazem `mayHaveSucceeded: true`. Não repita em massa.
+   * Só para linhas de confinamento (em pasto é proibido); passe `allowedLines` para o cliente recusar as outras.
+   * @throws {ValidationError} sem propertyId ou linha (inteiros positivos), com data inválida ou com a linha fora de `allowedLines`.
+   */
+  reprocessRelatorioGestaoNutricionalLinha(
+    options: ReprocessRelatorioGestaoNutricionalLinhaOptions
+  ): Promise<RelatorioGestaoNutricionalLoteResult>
+  /**
+   * Recalcula o relatório para `date` num curral só (`reprocessar: true`). Para mais de um
+   * curral, use `reprocessRelatorioGestaoNutricionalLinha`: recalcular vários lotes em
+   * sequência deixa só o último no cache.
+   * ⚠️ Grava num cache compartilhado do MBWEB: o resultado substitui o cache inteiro da
+   * fazenda e muda a tela de Gestão Nutricional de todos os usuários. Lento (1,5 a 5 min) e instável: o servidor
    * costuma cortar a consulta por volta de 300 s. TimeoutError/NetworkError trazem
    * `mayHaveSucceeded: true`. Não repita em massa.
    * Só para linhas de confinamento (em pasto é proibido); passe `allowedLines` para o cliente recusar as outras.

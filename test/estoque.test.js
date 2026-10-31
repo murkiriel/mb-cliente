@@ -105,6 +105,74 @@ describe('EstoqueErp.getRelatorioGestaoNutricionalLote', () => {
   })
 })
 
+describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLinha', () => {
+  const base = { propertyId: 7, date: '2026-07-20', linhaConfinamento: 11 }
+
+  it('manda a linha inteira, com a lista de lotes vazia e a meia-noite de Brasília', async () => {
+    const { client, auth, estoque, log } = setup()
+    const result = await estoque.reprocessRelatorioGestaoNutricionalLinha(base)
+
+    expect(client.post).toHaveBeenCalledWith(
+      PATH,
+      {
+        data: '2026-07-20T03:00:00.000Z',
+        dietas: [],
+        produtos: [],
+        propriedade: 7,
+        reprocessar: true,
+        produtos_texto: [],
+        lotes_confinamento: [],
+        linhas_confinamento: [11],
+        exibir_media_acumulada: false,
+        lotes_confinamento_texto: [],
+        linhas_confinamento_texto: [],
+      },
+      { timeoutMs: 600_000 }
+    )
+    expect(auth.withProperty).toHaveBeenCalledWith(client, 7, expect.any(Function), {
+      signal: undefined,
+    })
+    expect(log).toEqual(['select:7', 'fim'])
+    expect(result).toEqual({ localidades: [{ data_relatorio: '2026-07-20' }] })
+  })
+
+  it('repassa timeoutMs e signal da chamada', async () => {
+    const { client, estoque } = setup()
+    const signal = new AbortController().signal
+    await estoque.reprocessRelatorioGestaoNutricionalLinha({ ...base, timeoutMs: 1000, signal })
+    expect(client.post).toHaveBeenCalledWith(expect.any(String), expect.any(Object), {
+      timeoutMs: 1000,
+      signal,
+    })
+  })
+
+  it('linha dentro de allowedLines segue, e allowedLines não vai no corpo', async () => {
+    const { client, estoque } = setup()
+    await estoque.reprocessRelatorioGestaoNutricionalLinha({ ...base, allowedLines: [10, 11] })
+    const body = client.post.mock.calls[0][1]
+    expect(body.linhas_confinamento).toEqual([11])
+    expect(body).not.toHaveProperty('allowedLines')
+  })
+
+  it.each([
+    ['sem argumentos', undefined, 'propertyId'],
+    ['sem propertyId', { ...base, propertyId: undefined }, 'propertyId'],
+    ['sem linha', { ...base, linhaConfinamento: undefined }, 'linhaConfinamento'],
+    ['linha em lista', { ...base, linhaConfinamento: [11] }, 'linhaConfinamento'],
+    ['data inexistente', { ...base, date: '2026-02-31' }, 'date'],
+    ['timeoutMs inválido', { ...base, timeoutMs: 0 }, 'timeoutMs'],
+    ['linha fora de allowedLines', { ...base, allowedLines: [12] }, 'linhaConfinamento'],
+    ['allowedLines vazia', { ...base, allowedLines: [] }, 'allowedLines'],
+  ])('%s → ValidationError antes de qualquer chamada', async (_caso, options, field) => {
+    const { client, auth, estoque } = setup()
+    const err = await estoque.reprocessRelatorioGestaoNutricionalLinha(options).catch((e) => e)
+    expect(err).toBeInstanceOf(ValidationError)
+    expect(err.field).toBe(field)
+    expect(auth.withProperty).not.toHaveBeenCalled()
+    expect(client.post).not.toHaveBeenCalled()
+  })
+})
+
 describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLote', () => {
   const base = { propertyId: 7, date: '2026-07-20', loteConfinamento: 67, linhaConfinamento: 11 }
 

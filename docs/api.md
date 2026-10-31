@@ -383,7 +383,7 @@ Um 401 numa requisição autenticada dispara um novo login, a **reseleção da f
 
 Como a fazenda selecionada é estado do servidor, uma troca no meio de uma leitura faria a leitura devolver dados de outra fazenda. Cada instância de `MultBovinos` tem uma fila do tipo leitores/escritor:
 
-- **Exclusiva** (roda sozinha): `connect()`, `selectProperty()`, `forAllProperties()`, `bi.animais.getAll()`, `bi.movEstoque.getAll()`, os `get()` do BI chamados **com** `propertyId`, os `erp.custos.*` com `propertyId`, `getRelatorioGestaoNutricionalLote()` e `reprocessRelatorioGestaoNutricionalLote()` (sempre) e a página de grid ERP com um `propertyId` **diferente** da fazenda selecionada (seleção e leitura na mesma seção).
+- **Exclusiva** (roda sozinha): `connect()`, `selectProperty()`, `forAllProperties()`, `bi.animais.getAll()`, `bi.movEstoque.getAll()`, os `get()` do BI chamados **com** `propertyId`, os `erp.custos.*` com `propertyId`, `getRelatorioGestaoNutricionalLote()`, `reprocessRelatorioGestaoNutricionalLinha()` e `reprocessRelatorioGestaoNutricionalLote()` (sempre) e a página de grid ERP com um `propertyId` **diferente** da fazenda selecionada (seleção e leitura na mesma seção).
 - **Compartilhada** (várias juntas, nunca junto de uma exclusiva): cada página de grid ERP sem `propertyId` ou com o `propertyId` da fazenda já selecionada, os `get()` do BI **sem** `propertyId` e os custos sem `propertyId`.
 - A ordem de chegada é respeitada: uma leitura não ultrapassa uma troca que já está esperando.
 - **Reentrante:** dentro de uma seção exclusiva (ex.: o callback de `forAllProperties`), qualquer chamada roda direto.
@@ -1115,8 +1115,8 @@ Endpoint adicional, fora do manual oficial: `POST /producaopasto/relatorio-gesta
 | `propertyId`         | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção. |
 | `date`               | `string`      | ✅          | `YYYY-MM-DD`, enviada como `data`. Exigida no corpo, mas **ignorada pelo servidor** (ver nota).                           |
 | `produtos`           | `number[]`    | —           | Padrão `[]`.                                                                                                              |
-| `linhasConfinamento` | `number[]`    | —           | Enviado como `linhas_confinamento`. Padrão `[]`.                                                                          |
-| `lotesConfinamento`  | `number[]`    | —           | Enviado como `lotes_confinamento`. Padrão `[]`.                                                                           |
+| `linhasConfinamento` | `number[]`    | —           | Enviado como `linhas_confinamento`. Padrão `[]`. Ignorado pelo servidor (ver nota).                                       |
+| `lotesConfinamento`  | `number[]`    | —           | Enviado como `lotes_confinamento`. Padrão `[]`. Ignorado pelo servidor (ver nota).                                        |
 | `timeoutMs`          | `number`      | —           | Prazo só desta chamada. Padrão: o da instância.                                                                           |
 | `signal`             | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                  |
 
@@ -1124,11 +1124,34 @@ Endpoint adicional, fora do manual oficial: `POST /producaopasto/relatorio-gesta
 
 **Retorno:** o conteúdo de `dados`: `{ localidades: [...], exibir_media, data_alteracao_base, filtro }`. Cada item de `localidades[]` tem cerca de 35 campos, entre eles `localidade, localidade_id, confinamento_id, qtd_cabecas, sexos, primeira_dt_entrada, peso_entrada, permanencia, diarias_lote, dieta_atual, qtd_fornecimento_ultima_dieta, transicao, consumo_mo, consumo_ms, cab_mo, cab_ms, custo_medio, rs_valor_mo, variacao_porc, sobra_d0..d3, ims_pv0, ims_pv1, ims_pv5, ims_pv_medio, peso_projetado, gpd_medio, peso_previsto_abate, data_relatorio`.
 
-> ⚠️ O servidor **ignora a data** (`date`, enviada como `data`): qualquer data devolve o mesmo `data_relatorio` (o último dia fechado, recalculado diariamente pelo servidor). Não serve para consultar datas passadas — para isso existe o recálculo, abaixo.
->
-> **Escopo:** nos registros observados, só currais de **confinamento com lote ativo** (todo registro tem `confinamento_id`). Não foi confirmado se, sem nenhum filtro de confinamento, o servidor inclui pastos — para pastos, use `getLocalizacoes()` / `getCurrais()`.
+> ⚠️ **A consulta não calcula nada.** Ela devolve o resultado da última busca feita naquela fazenda, pela tela do MBWEB ou por recálculo. Por isso o servidor **ignora a data e os filtros** enviados. O resultado pode ser de um dia antigo, de uma linha de pasto ou de um curral só, e muda sempre que alguém busca na tela. O campo `filtro` diz de que busca o resultado veio (data, linhas e lotes), e `data_alteracao_base` diz há quanto tempo. Para calcular um dia, use o recálculo, abaixo.
 >
 > **Linhas de subtotal:** registros com `media: true` são médias do grupo, não currais — exclua-os ao somar. Há também linhas sem `localidade_id`.
+
+### `reprocessRelatorioGestaoNutricionalLinha({ propertyId, date, linhaConfinamento, allowedLines?, timeoutMs?, signal? })` ⚠️ (escrita)
+
+Mesmo endpoint, com `reprocessar: true` e a lista de lotes vazia, como a tela envia: o servidor **recalcula** o relatório para `date` e devolve todos os currais da linha, com o `data_relatorio` pedido. É o recálculo a preferir.
+
+| Parâmetro           | Tipo          | Obrigatório | Descrição                                                                                                                 |
+| ------------------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `propertyId`        | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção. |
+| `date`              | `string`      | ✅          | `YYYY-MM-DD`. Enviada como `data`, na meia-noite de Brasília, como a tela do MBWEB faz.                                   |
+| `linhaConfinamento` | `number`      | ✅          | A linha de confinamento. Nunca uma linha de pasto (ver abaixo).                                                           |
+| `allowedLines`      | `number[]`    | —           | Ids das linhas de confinamento da fazenda. Quando passado, uma `linhaConfinamento` fora da lista é recusada.              |
+| `timeoutMs`         | `number`      | —           | Prazo só desta chamada. Padrão `600000` (10 min).                                                                         |
+| `signal`            | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                  |
+
+**Lança:** `ValidationError` sem `propertyId` ou linha (inteiros positivos), com `date` inválida, com `timeoutMs` inválido ou com a linha fora de `allowedLines` — antes de qualquer chamada.
+
+**Retorno:** o mesmo de `getRelatorioGestaoNutricionalLote`, com os currais da linha. Guarde a resposta: a próxima busca de qualquer pessoa troca o cache.
+
+> ⚠️ **Grava num cache compartilhado do MBWEB.** O resultado substitui o cache inteiro da fazenda, e a tela de Gestão Nutricional de **todos os usuários** passa a mostrar só esta linha e este dia, até a próxima busca.
+>
+> ⚠️ **Lento e instável.** Leva minutos, e o servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`). Uma linha com muitos currais pode passar desse limite. Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa: o cliente não espaça chamadas, e decidir quantos recálculos fazer e com que intervalo é responsabilidade de quem chama.
+>
+> ⚠️ **Só linhas de confinamento.** Recalcular uma linha de pasto é proibido. O cliente não tem como saber se uma linha é de pasto: quem chama tem de saber, e pode passar `allowedLines` (as linhas de confinamento da fazenda) para o método recusar as outras.
+>
+> A fila de fazenda fica ocupada durante todo o recálculo: outras trocas de fazenda da mesma instância esperam.
 
 ### `reprocessRelatorioGestaoNutricionalLote({ propertyId, date, loteConfinamento, linhaConfinamento, allowedLines?, timeoutMs?, signal? })` ⚠️ (escrita)
 
@@ -1148,7 +1171,7 @@ Mesmo endpoint, com `reprocessar: true`: o servidor **recalcula** o relatório p
 
 **Retorno:** o mesmo de `getRelatorioGestaoNutricionalLote`, com o curral recalculado.
 
-> ⚠️ **Grava num cache compartilhado do MBWEB.** Depois do recálculo, a tela de Gestão Nutricional de **todos os usuários da fazenda** mostra o resultado recalculado. Sem filtro de curral o servidor recalcularia a fazenda inteira; por isso o método exige exatamente um lote e uma linha. Recalcular para uma data antiga muda o que as pessoas veem até o próximo recálculo do servidor (ou até você recalcular de novo para o último dia fechado).
+> ⚠️ **Substitui o cache inteiro da fazenda.** A tela de Gestão Nutricional de **todos os usuários** e a consulta normal passam a ter só este curral, até a próxima busca. Recalcular vários lotes em sequência deixa só o último. Para mais de um curral, use `reprocessRelatorioGestaoNutricionalLinha`.
 >
 > ⚠️ **Lento e instável.** Leva de 1,5 a 5 minutos, e o servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`). Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa: o cliente não espaça chamadas, e decidir quantos recálculos fazer e com que intervalo é responsabilidade de quem chama.
 >

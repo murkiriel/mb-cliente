@@ -30,6 +30,24 @@ function checkAllowedLine(line, allowedLines) {
   }
 }
 
+// Corpo do recálculo, igual ao da tela do MBWEB.
+function reprocessBody({ propertyId, date, lotes, line }) {
+  const midnight = isoToUtc(date, 'date') + BRASILIA_MIDNIGHT_MS
+  return {
+    data: new Date(midnight).toISOString(),
+    dietas: [],
+    produtos: [],
+    propriedade: propertyId,
+    reprocessar: true,
+    produtos_texto: [],
+    lotes_confinamento: lotes,
+    linhas_confinamento: [line],
+    exibir_media_acumulada: false,
+    lotes_confinamento_texto: [],
+    linhas_confinamento_texto: [],
+  }
+}
+
 export class EstoqueErp {
   #grid
   #client
@@ -254,15 +272,15 @@ export class EstoqueErp {
   // Endpoint adicional, não documentado pela API oficial -- não é uma listagem/grid
   // paginada, é um POST de relatório com corpo de requisição fixo.
   //
-  // `date` (enviado como "data", a data de referência) é EXIGIDO no corpo da
-  // requisição, mas confirmado que o servidor o IGNORA: testado com hoje,
-  // ontem e datas de meses distintos -- todas devolveram o mesmo
-  // `data_relatorio` (o último dia fechado, recalculado todo dia pelo
-  // servidor). Para outra data, use reprocessRelatorioGestaoNutricionalLote.
+  // A consulta não calcula nada: devolve o resultado da última busca feita naquela
+  // fazenda, pela tela do MBWEB ou por recálculo, e `filtro` diz qual foi (data,
+  // linhas e lotes). Por isso `date` (enviado como "data", exigido no corpo) e os
+  // filtros são ignorados, e o resultado pode ser de um dia antigo, de uma linha de
+  // pasto ou de um curral só. Confira `data_relatorio` e `filtro` antes de usar.
+  // Para calcular um dia, use reprocessRelatorioGestaoNutricionalLinha.
   //
-  // Nos registros observados, só currais de CONFINAMENTO com lote ativo (todo
-  // registro tinha `confinamento_id`); linhas com `media: true` são subtotais
-  // do grupo, não currais, e há linhas sem `localidade_id`.
+  // Linhas com `media: true` são subtotais do grupo, não currais, e há linhas sem
+  // `localidade_id`.
   //
   // A fazenda propertyId é selecionada e o POST roda na mesma seção exclusiva
   // da fila. Resposta bruta: `{ dados: { localidades: [...], exibir_media,
@@ -288,27 +306,46 @@ export class EstoqueErp {
     return this.#postReport(propertyId, body, { timeoutMs, signal })
   }
 
-  // Recálculo do mesmo relatório para uma data, num curral só. Mesmo endpoint,
-  // com `reprocessar: true`: o servidor recalcula de verdade e respeita a data.
+  // Recálculo do relatório para uma data, numa linha de confinamento inteira. Mesmo
+  // endpoint, com `reprocessar: true` e a lista de lotes vazia, como a tela envia:
+  // o servidor recalcula de verdade, respeita a data e devolve todos os currais da
+  // linha. Prefira este ao recálculo por lote.
   //
-  // ⚠️ ESCREVE num cache compartilhado do MBWEB: a tela de Gestão Nutricional
-  // de todos os usuários da fazenda passa a mostrar o resultado recalculado.
-  // Sem filtro de curral o recálculo pega a fazenda inteira, por isso o método
-  // exige exatamente um lote e uma linha de confinamento e não aceita lista.
+  // ⚠️ ESCREVE num cache compartilhado do MBWEB: o resultado substitui o cache
+  // inteiro da fazenda, e a tela de Gestão Nutricional de todos os usuários passa a
+  // mostrar só esta linha e este dia, até a próxima busca.
   //
-  // Lento e instável: leva de 1,5 a 5 minutos e o servidor costuma cortar a
-  // consulta por volta de 300 s (TimeoutError, NetworkError ou ServerError).
-  // Como toda escrita, TimeoutError/NetworkError trazem mayHaveSucceeded: o
-  // recálculo pode ter sido aplicado. Não repita em massa: quem chama decide
-  // quantos recálculos faz e com que intervalo.
+  // Lento e instável: leva minutos e o servidor costuma cortar a consulta por volta
+  // de 300 s (TimeoutError, NetworkError ou ServerError). Como toda escrita,
+  // TimeoutError/NetworkError trazem mayHaveSucceeded: o recálculo pode ter sido
+  // aplicado. Não repita em massa: quem chama decide quantos recálculos faz e com
+  // que intervalo.
   //
-  // Só vale para linhas de CONFINAMENTO: recalcular uma linha de pasto é
-  // proibido, e o cliente não tem como saber o tipo da linha. Quem tem a
-  // lista das linhas de confinamento passa allowedLines, e o método recusa
-  // qualquer outra antes de chamar.
+  // Só vale para linhas de CONFINAMENTO: recalcular uma linha de pasto é proibido, e
+  // o cliente não tem como saber o tipo da linha. Quem tem a lista das linhas de
+  // confinamento passa allowedLines, e o método recusa qualquer outra antes de chamar.
   //
-  // A fazenda é selecionada na seção exclusiva da fila, que fica ocupada
-  // durante todo o recálculo (outras trocas de fazenda desta instância esperam).
+  // A fazenda é selecionada na seção exclusiva da fila, que fica ocupada durante
+  // todo o recálculo (outras trocas de fazenda desta instância esperam).
+  async reprocessRelatorioGestaoNutricionalLinha({
+    propertyId,
+    date,
+    linhaConfinamento,
+    allowedLines,
+    timeoutMs = atLeastInstance(REPROCESS_TIMEOUT_MS, this.#client),
+    signal,
+  } = {}) {
+    checkPositiveInt(propertyId, 'propertyId')
+    checkPositiveInt(linhaConfinamento, 'linhaConfinamento')
+    if (allowedLines !== undefined) checkAllowedLine(linhaConfinamento, allowedLines)
+    const body = reprocessBody({ propertyId, date, lotes: [], line: linhaConfinamento })
+    return this.#postReport(propertyId, body, { timeoutMs, signal })
+  }
+
+  // Recálculo de um curral só. Tem os mesmos avisos do recálculo por linha, e mais
+  // um: o resultado também substitui o cache inteiro da fazenda, então a tela e a
+  // consulta normal ficam só com este curral, e recalcular vários lotes em sequência
+  // deixa só o último. Para mais de um curral, use o recálculo por linha.
   async reprocessRelatorioGestaoNutricionalLote({
     propertyId,
     date,
@@ -322,20 +359,12 @@ export class EstoqueErp {
     checkPositiveInt(loteConfinamento, 'loteConfinamento')
     checkPositiveInt(linhaConfinamento, 'linhaConfinamento')
     if (allowedLines !== undefined) checkAllowedLine(linhaConfinamento, allowedLines)
-    const midnight = isoToUtc(date, 'date') + BRASILIA_MIDNIGHT_MS
-    const body = {
-      data: new Date(midnight).toISOString(),
-      dietas: [],
-      produtos: [],
-      propriedade: propertyId,
-      reprocessar: true,
-      produtos_texto: [],
-      lotes_confinamento: [loteConfinamento],
-      linhas_confinamento: [linhaConfinamento],
-      exibir_media_acumulada: false,
-      lotes_confinamento_texto: [],
-      linhas_confinamento_texto: [],
-    }
+    const body = reprocessBody({
+      propertyId,
+      date,
+      lotes: [loteConfinamento],
+      line: linhaConfinamento,
+    })
     return this.#postReport(propertyId, body, { timeoutMs, signal })
   }
 
