@@ -1147,7 +1147,7 @@ Mesmo endpoint, com `reprocessar: true` e a lista de lotes vazia, como a tela en
 
 > ⚠️ **Grava num cache compartilhado do MBWEB.** O resultado substitui o cache inteiro da fazenda, e a tela de Gestão Nutricional de **todos os usuários** passa a mostrar só esta linha e este dia, até a próxima busca.
 >
-> ⚠️ **Lento e instável.** Leva minutos, e o servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`). Uma linha com muitos currais pode passar desse limite. Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa: o cliente não espaça chamadas, e decidir quantos recálculos fazer e com que intervalo é responsabilidade de quem chama.
+> ⚠️ **Lento e instável.** Leva minutos, e o servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`). Uma linha com muitos currais pode passar desse limite. O corte é da conexão, não do cálculo: o servidor costuma terminar depois, em poucos minutos, e o resultado aparece na consulta normal, com o `filtro` da linha e da data pedidas. Antes de repetir, consulte. Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa: o cliente não espaça chamadas, e decidir quantos recálculos fazer e com que intervalo é responsabilidade de quem chama.
 >
 > ⚠️ **Só linhas de confinamento.** Recalcular uma linha de pasto é proibido. O cliente não tem como saber se uma linha é de pasto: quem chama tem de saber, e pode passar `allowedLines` (as linhas de confinamento da fazenda) para o método recusar as outras.
 >
