@@ -369,20 +369,21 @@ export class EstoqueErp {
     loteConfinamento,
     linhaConfinamento,
     allowedLines,
-    timeoutMs = atLeastInstance(REPROCESS_TIMEOUT_MS, this.#client),
+    timeoutMs,
     signal,
   } = {}) {
     checkPositiveInt(propertyId, 'propertyId')
     checkPositiveInt(loteConfinamento, 'loteConfinamento')
-    checkPositiveInt(linhaConfinamento, 'linhaConfinamento')
-    if (allowedLines !== undefined) checkAllowedLine(linhaConfinamento, allowedLines)
-    const body = reprocessBody({
+    // Um grupo de um lote só; o prazo padrão é o do recálculo por lotes.
+    return this.reprocessRelatorioGestaoNutricionalLotes({
       propertyId,
       date,
-      lotes: [loteConfinamento],
-      line: linhaConfinamento,
+      lotesConfinamento: [loteConfinamento],
+      linhaConfinamento,
+      allowedLines,
+      timeoutMs,
+      signal,
     })
-    return this.#postReport(propertyId, body, { timeoutMs, signal })
   }
 
   // Recálculo de um grupo de currais (1 ou mais) de uma linha, numa chamada. Serve
