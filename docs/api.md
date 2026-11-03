@@ -383,7 +383,7 @@ Um 401 numa requisição autenticada dispara um novo login, a **reseleção da f
 
 Como a fazenda selecionada é estado do servidor, uma troca no meio de uma leitura faria a leitura devolver dados de outra fazenda. Cada instância de `MultBovinos` tem uma fila do tipo leitores/escritor:
 
-- **Exclusiva** (roda sozinha): `connect()`, `selectProperty()`, `forAllProperties()`, `bi.animais.getAll()`, `bi.movEstoque.getAll()`, os `get()` do BI chamados **com** `propertyId`, os `erp.custos.*` com `propertyId`, `getRelatorioGestaoNutricionalLote()`, `reprocessRelatorioGestaoNutricionalLinha()` e `reprocessRelatorioGestaoNutricionalLote()` (sempre) e a página de grid ERP com um `propertyId` **diferente** da fazenda selecionada (seleção e leitura na mesma seção).
+- **Exclusiva** (roda sozinha): `connect()`, `selectProperty()`, `forAllProperties()`, `bi.animais.getAll()`, `bi.movEstoque.getAll()`, os `get()` do BI chamados **com** `propertyId`, os `erp.custos.*` com `propertyId`, `getRelatorioGestaoNutricionalLote()`, `reprocessRelatorioGestaoNutricionalLinha()`, `reprocessRelatorioGestaoNutricionalLote()` e `reprocessRelatorioGestaoNutricionalLotes()` (sempre) e a página de grid ERP com um `propertyId` **diferente** da fazenda selecionada (seleção e leitura na mesma seção).
 - **Compartilhada** (várias juntas, nunca junto de uma exclusiva): cada página de grid ERP sem `propertyId` ou com o `propertyId` da fazenda já selecionada, os `get()` do BI **sem** `propertyId` e os custos sem `propertyId`.
 - A ordem de chegada é respeitada: uma leitura não ultrapassa uma troca que já está esperando.
 - **Reentrante:** dentro de uma seção exclusiva (ex.: o callback de `forAllProperties`), qualquer chamada roda direto.
@@ -1171,11 +1171,37 @@ Mesmo endpoint, com `reprocessar: true`: o servidor **recalcula** o relatório p
 
 **Retorno:** o mesmo de `getRelatorioGestaoNutricionalLote`, com o curral recalculado.
 
-> ⚠️ **Substitui o cache inteiro da fazenda.** A tela de Gestão Nutricional de **todos os usuários** e a consulta normal passam a ter só este curral, até a próxima busca. Recalcular vários lotes em sequência deixa só o último. Para mais de um curral, use `reprocessRelatorioGestaoNutricionalLinha`.
+> ⚠️ **Substitui o cache inteiro da fazenda.** A tela de Gestão Nutricional de **todos os usuários** e a consulta normal passam a ter só este curral, até a próxima busca. Recalcular vários lotes em sequência deixa só o último. Para mais de um curral, use `reprocessRelatorioGestaoNutricionalLinha` ou `reprocessRelatorioGestaoNutricionalLotes`.
 >
 > ⚠️ **Lento e instável.** Leva de 1,5 a 5 minutos, e o servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`). Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa: o cliente não espaça chamadas, e decidir quantos recálculos fazer e com que intervalo é responsabilidade de quem chama.
 >
 > ⚠️ **Só linhas de confinamento.** Recalcular uma linha de pasto é proibido. O cliente não tem como saber se uma linha é de pasto: quem chama tem de saber, e pode passar `allowedLines` (as linhas de confinamento da fazenda) para o método recusar as outras.
+>
+> A fila de fazenda fica ocupada durante todo o recálculo: outras trocas de fazenda da mesma instância esperam.
+
+### `reprocessRelatorioGestaoNutricionalLotes({ propertyId, date, lotesConfinamento, linhaConfinamento, allowedLines?, timeoutMs?, signal? })` ⚠️ (escrita)
+
+Mesmo endpoint, com `reprocessar: true` e uma lista de lotes (1 ou mais) de uma linha: o servidor **recalcula** o relatório para `date` só para esses currais e devolve o `data_relatorio` pedido. Serve para dividir uma linha cujo recálculo inteiro não termina de uma vez: o custo de cada chamada é quase fixo, então um grupo menor acaba antes.
+
+| Parâmetro           | Tipo          | Obrigatório | Descrição                                                                                                                 |
+| ------------------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `propertyId`        | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção. |
+| `date`              | `string`      | ✅          | `YYYY-MM-DD`. Enviada como `data`, na meia-noite de Brasília, como a tela do MBWEB faz.                                   |
+| `lotesConfinamento` | `number[]`    | ✅          | Lista não vazia de lotes de confinamento (inteiros positivos, sem repetidos), todos da `linhaConfinamento`.               |
+| `linhaConfinamento` | `number`      | ✅          | A linha de confinamento dos currais. Nunca uma linha de pasto (ver abaixo).                                               |
+| `allowedLines`      | `number[]`    | —           | Ids das linhas de confinamento da fazenda. Quando passado, uma `linhaConfinamento` fora da lista é recusada.              |
+| `timeoutMs`         | `number`      | —           | Prazo só desta chamada. Padrão `600000` (10 min).                                                                         |
+| `signal`            | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                  |
+
+**Lança:** `ValidationError` sem `propertyId` ou linha (inteiros positivos), com a lista de lotes vazia, com id inválido ou repetido, com `date` inválida, com `timeoutMs` inválido ou com a linha fora de `allowedLines` — antes de qualquer chamada.
+
+**Retorno:** o mesmo de `getRelatorioGestaoNutricionalLote`, só com os currais pedidos.
+
+> ⚠️ **Substitui o cache inteiro da fazenda.** A tela de Gestão Nutricional de **todos os usuários** e a consulta normal passam a ter só este grupo de currais, até a próxima busca. Recalcular vários grupos em sequência deixa só o último no cache: guarde a resposta de cada um.
+>
+> ⚠️ **Lento e instável.** O servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`), e o corte é da conexão, não do cálculo. Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa.
+>
+> ⚠️ **Só linhas de confinamento.** Recalcular uma linha de pasto é proibido. Quem chama tem de saber o tipo da linha, e pode passar `allowedLines` para o método recusar as outras.
 >
 > A fila de fazenda fica ocupada durante todo o recálculo: outras trocas de fazenda da mesma instância esperam.
 

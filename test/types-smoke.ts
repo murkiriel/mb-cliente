@@ -91,6 +91,14 @@ async function smoke() {
     allowedLines: [3],
   })
   recalculatedLine.filtro
+  const recalculatedGroup = await mb.erp.estoque.reprocessRelatorioGestaoNutricionalLotes({
+    propertyId: 1,
+    date: '2026-01-01',
+    lotesConfinamento: [2, 4],
+    linhaConfinamento: 3,
+    allowedLines: [3],
+  })
+  recalculatedGroup.localidades
   await mb.raw.post('/x/', {}, { timeoutMs: 1000 })
   try {
     mb.erp.estoque.getMovimentacaoMaterial()

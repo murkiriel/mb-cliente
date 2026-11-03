@@ -6,6 +6,12 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-03
+
+### Adicionado
+
+- `erp.estoque.reprocessRelatorioGestaoNutricionalLotes()`: recalcula o relatório de Gestão Nutricional de um grupo de currais (1 ou mais) de uma linha de confinamento, em uma chamada, com a mesma recusa de `allowedLines`. Lista vazia, id inválido ou lote repetido lançam `ValidationError` antes de qualquer chamada. Serve para dividir uma linha cujo recálculo inteiro não termina de uma vez. Como os outros recálculos, grava no cache compartilhado do MBWEB e a resposta traz só os currais pedidos.
+
 ## [0.3.0] - 2026-10-31
 
 ### Adicionado

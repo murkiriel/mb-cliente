@@ -258,3 +258,94 @@ describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLote', () => {
     )
   })
 })
+
+describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLotes', () => {
+  const base = {
+    propertyId: 7,
+    date: '2026-07-20',
+    lotesConfinamento: [67, 68],
+    linhaConfinamento: 11,
+  }
+
+  it('manda o corpo da tela com a lista de lotes e a meia-noite de Brasília', async () => {
+    const { client, auth, estoque, log } = setup()
+    const result = await estoque.reprocessRelatorioGestaoNutricionalLotes(base)
+
+    expect(client.post).toHaveBeenCalledWith(
+      PATH,
+      {
+        data: '2026-07-20T03:00:00.000Z',
+        dietas: [],
+        produtos: [],
+        propriedade: 7,
+        reprocessar: true,
+        produtos_texto: [],
+        lotes_confinamento: [67, 68],
+        linhas_confinamento: [11],
+        exibir_media_acumulada: false,
+        lotes_confinamento_texto: [],
+        linhas_confinamento_texto: [],
+      },
+      { timeoutMs: 600_000 }
+    )
+    expect(auth.withProperty).toHaveBeenCalledWith(client, 7, expect.any(Function), {
+      signal: undefined,
+    })
+    expect(log).toEqual(['select:7', 'fim'])
+    expect(result).toEqual({ localidades: [{ data_relatorio: '2026-07-20' }] })
+  })
+
+  it('repassa timeoutMs e signal da chamada', async () => {
+    const { client, estoque } = setup()
+    const signal = new AbortController().signal
+    await estoque.reprocessRelatorioGestaoNutricionalLotes({ ...base, timeoutMs: 1000, signal })
+    expect(client.post).toHaveBeenCalledWith(expect.any(String), expect.any(Object), {
+      timeoutMs: 1000,
+      signal,
+    })
+  })
+
+  it('linha dentro de allowedLines segue, e allowedLines não vai no corpo', async () => {
+    const { client, estoque } = setup()
+    await estoque.reprocessRelatorioGestaoNutricionalLotes({ ...base, allowedLines: [10, 11] })
+    const body = client.post.mock.calls[0][1]
+    expect(body.linhas_confinamento).toEqual([11])
+    expect(body).not.toHaveProperty('allowedLines')
+  })
+
+  it('um lote só também vale', async () => {
+    const { client, estoque } = setup()
+    await estoque.reprocessRelatorioGestaoNutricionalLotes({ ...base, lotesConfinamento: [67] })
+    expect(client.post.mock.calls[0][1].lotes_confinamento).toEqual([67])
+  })
+
+  it.each([
+    ['sem propertyId', { propertyId: undefined }, 'propertyId'],
+    ['sem lotes', { lotesConfinamento: undefined }, 'lotesConfinamento'],
+    ['lista de lotes vazia', { lotesConfinamento: [] }, 'lotesConfinamento'],
+    ['lotes que não é lista', { lotesConfinamento: 67 }, 'lotesConfinamento'],
+    ['lote inválido', { lotesConfinamento: [67, 0] }, 'lotesConfinamento'],
+    ['lote repetido', { lotesConfinamento: [67, 68, 67] }, 'lotesConfinamento'],
+    ['sem linha', { linhaConfinamento: undefined }, 'linhaConfinamento'],
+    ['data inexistente', { date: '2026-02-31' }, 'date'],
+    ['timeoutMs inválido', { timeoutMs: 0 }, 'timeoutMs'],
+    ['linha fora de allowedLines', { allowedLines: [12, 13] }, 'linhaConfinamento'],
+    ['allowedLines vazia', { allowedLines: [] }, 'allowedLines'],
+  ])('%s → ValidationError antes de qualquer chamada', async (_caso, change, field) => {
+    const { client, auth, estoque } = setup()
+    const err = await estoque
+      .reprocessRelatorioGestaoNutricionalLotes({ ...base, ...change })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(ValidationError)
+    expect(err.field).toBe(field)
+    expect(auth.withProperty).not.toHaveBeenCalled()
+    expect(client.post).not.toHaveBeenCalled()
+  })
+
+  it('sem argumentos → ValidationError', async () => {
+    const { estoque } = setup()
+    await expect(estoque.reprocessRelatorioGestaoNutricionalLotes()).rejects.toBeInstanceOf(
+      ValidationError
+    )
+  })
+})

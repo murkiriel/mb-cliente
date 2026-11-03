@@ -125,7 +125,7 @@ A fazenda selecionada é **estado do servidor, por usuário**: se duas operaçõ
 
 - `mb.connect()` e `mb.selectProperty()`;
 - `erp.custos.*` com `propertyId` (selecionam a fazenda e fazem o POST na mesma seção);
-- `erp.estoque.getRelatorioGestaoNutricionalLote()`, `reprocessRelatorioGestaoNutricionalLinha()` e `reprocessRelatorioGestaoNutricionalLote()` (sempre selecionam a fazenda do `propertyId` e fazem o POST na mesma seção);
+- `erp.estoque.getRelatorioGestaoNutricionalLote()`, `reprocessRelatorioGestaoNutricionalLinha()`, `reprocessRelatorioGestaoNutricionalLote()` e `reprocessRelatorioGestaoNutricionalLotes()` (sempre selecionam a fazenda do `propertyId` e fazem o POST na mesma seção);
 - `bi.animais.getAll()`, `bi.movEstoque.getAll()` e `mb.forAllProperties()`;
 - os `get()` por fazenda do BI com `propertyId` (`bi.animais`, `bi.movEstoque`, `bi.movMateriais`, `bi.suplementacao`, `bi.producaoRacao`);
 - uma página de grid ERP com `propertyId` **diferente** da fazenda já selecionada (seleção e leitura na mesma seção).
@@ -694,6 +694,16 @@ await mb.erp.estoque.reprocessRelatorioGestaoNutricionalLote({
   linhaConfinamento,
 })
 
+// O mesmo, num grupo de currais da mesma linha, numa chamada só. Também grava no cache
+// compartilhado (a resposta traz só os currais pedidos). Serve para dividir uma linha
+// que não termina de uma vez.
+await mb.erp.estoque.reprocessRelatorioGestaoNutricionalLotes({
+  propertyId,
+  date: '2026-06-29',
+  lotesConfinamento: [loteA, loteB],
+  linhaConfinamento,
+})
+
 // erp.animais
 await mb.erp.animais.getInventariosAnimais() // eventos de contagem/inventário
 ```
@@ -940,6 +950,7 @@ O `timeoutMs` do construtor vale para toda a instância. Para trocar o prazo de 
 | `getRelatorioGestaoNutricionalLote`                                      | O da instância                                                                 |
 | `reprocessRelatorioGestaoNutricionalLinha`                               | 600 s                                                                          |
 | `reprocessRelatorioGestaoNutricionalLote`                                | 600 s                                                                          |
+| `reprocessRelatorioGestaoNutricionalLotes`                               | 600 s                                                                          |
 | `mb.raw.get`/`post` (terceiro argumento)                                 | O da instância                                                                 |
 
 `timeoutMs` inválido (não positivo) lança `ValidationError`.
@@ -1140,6 +1151,7 @@ Status: ✅ funciona · ⚠️ funciona com ressalva · 🔕 só traz dados se o
 | `erp.estoque`                                             | `getRelatorioGestaoNutricionalLote`                                                                                                                                    | ⚠️ devolve a última busca da fazenda; `date` e filtros ignorados                                                                         |
 | `erp.estoque`                                             | `reprocessRelatorioGestaoNutricionalLinha`                                                                                                                             | ⚠️ escrita: recalcula a linha para a data; substitui o cache da fazenda; lento e instável                                                |
 | `erp.estoque`                                             | `reprocessRelatorioGestaoNutricionalLote`                                                                                                                              | ⚠️ escrita: recalcula um curral para a data; substitui o cache da fazenda; lento e instável                                              |
+| `erp.estoque`                                             | `reprocessRelatorioGestaoNutricionalLotes`                                                                                                                             | ⚠️ escrita: recalcula um grupo de currais de uma linha para a data; substitui o cache da fazenda; lento e instável                       |
 | `erp.estoque.getTratosDiariosPrevistos`                   | —                                                                                                                                                                      | ✅ (from/to não testado ainda)                                                                                                           |
 | `erp.estoque.getDefinicaoDiariaTratos`                    | com `from`/`to`                                                                                                                                                        | ✅ com data                                                                                                                              |
 | `erp.animais.getInventariosAnimais`                       | —                                                                                                                                                                      | ✅                                                                                                                                       |

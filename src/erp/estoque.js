@@ -30,6 +30,23 @@ function checkAllowedLine(line, allowedLines) {
   }
 }
 
+// lotesConfinamento: lista não vazia de ids inteiros positivos, sem repetidos.
+function checkLotes(lotes) {
+  if (!Array.isArray(lotes) || lotes.length === 0) {
+    throw new ValidationError('lotesConfinamento deve ser uma lista não vazia de ids de lote', {
+      field: 'lotesConfinamento',
+      received: lotes,
+    })
+  }
+  for (const id of lotes) checkPositiveInt(id, 'lotesConfinamento')
+  if (new Set(lotes).size !== lotes.length) {
+    throw new ValidationError('lotesConfinamento não pode ter lotes repetidos', {
+      field: 'lotesConfinamento',
+      received: lotes,
+    })
+  }
+}
+
 // Corpo do recálculo, igual ao da tela do MBWEB.
 function reprocessBody({ propertyId, date, lotes, line }) {
   const midnight = isoToUtc(date, 'date') + BRASILIA_MIDNIGHT_MS
@@ -363,6 +380,33 @@ export class EstoqueErp {
       propertyId,
       date,
       lotes: [loteConfinamento],
+      line: linhaConfinamento,
+    })
+    return this.#postReport(propertyId, body, { timeoutMs, signal })
+  }
+
+  // Recálculo de um grupo de currais (1 ou mais) de uma linha, numa chamada. Serve
+  // para dividir uma linha que não termina de uma vez. Tem os mesmos avisos do
+  // recálculo por linha, e mais um: o resultado também substitui o cache inteiro da
+  // fazenda, então a tela e a consulta normal ficam só com este grupo, e a resposta
+  // traz só os currais pedidos.
+  async reprocessRelatorioGestaoNutricionalLotes({
+    propertyId,
+    date,
+    lotesConfinamento,
+    linhaConfinamento,
+    allowedLines,
+    timeoutMs = atLeastInstance(REPROCESS_TIMEOUT_MS, this.#client),
+    signal,
+  } = {}) {
+    checkPositiveInt(propertyId, 'propertyId')
+    checkLotes(lotesConfinamento)
+    checkPositiveInt(linhaConfinamento, 'linhaConfinamento')
+    if (allowedLines !== undefined) checkAllowedLine(linhaConfinamento, allowedLines)
+    const body = reprocessBody({
+      propertyId,
+      date,
+      lotes: lotesConfinamento,
       line: linhaConfinamento,
     })
     return this.#postReport(propertyId, body, { timeoutMs, signal })

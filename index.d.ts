@@ -1059,6 +1059,22 @@ export interface ReprocessRelatorioGestaoNutricionalLoteOptions {
   signal?: AbortSignal
 }
 
+/** Recálculo do relatório de Gestão Nutricional para uma data, num grupo de currais (1 ou mais) de uma linha. */
+export interface ReprocessRelatorioGestaoNutricionalLotesOptions {
+  propertyId: number
+  /** YYYY-MM-DD. Diferente da consulta, o recálculo respeita a data. */
+  date: string
+  /** Lista não vazia de lotes de confinamento (inteiros positivos, sem repetidos), todos da mesma linha. */
+  lotesConfinamento: number[]
+  /** A linha de confinamento dos currais. Nunca uma linha de pasto: o recálculo em pasto é proibido, e o cliente não tem como saber o tipo da linha. */
+  linhaConfinamento: number
+  /** Ids das linhas de confinamento da fazenda: quando passado, `linhaConfinamento` fora da lista lança ValidationError antes de qualquer chamada. */
+  allowedLines?: number[]
+  /** Prazo só desta chamada. Padrão 600000 (10 min). */
+  timeoutMs?: number
+  signal?: AbortSignal
+}
+
 export interface RelatorioGestaoNutricionalLoteItem {
   localidade: string
   localidade_id: number
@@ -1247,6 +1263,19 @@ export interface EstoqueErp {
    */
   reprocessRelatorioGestaoNutricionalLote(
     options: ReprocessRelatorioGestaoNutricionalLoteOptions
+  ): Promise<RelatorioGestaoNutricionalLoteResult>
+  /**
+   * Recalcula o relatório para `date` num grupo de currais (1 ou mais) de uma linha de
+   * confinamento (`reprocessar: true`), em uma chamada. A resposta traz só os currais pedidos.
+   * ⚠️ Grava num cache compartilhado do MBWEB: o resultado substitui o cache inteiro da
+   * fazenda e muda a tela de Gestão Nutricional de todos os usuários. Lento e instável: o
+   * servidor costuma cortar a consulta por volta de 300 s. TimeoutError/NetworkError trazem
+   * `mayHaveSucceeded: true`. Não repita em massa.
+   * Só para linhas de confinamento (em pasto é proibido); passe `allowedLines` para o cliente recusar as outras.
+   * @throws {ValidationError} sem propertyId ou linha (inteiros positivos), com a lista de lotes vazia, com id inválido ou repetido, com data inválida ou com a linha fora de `allowedLines`.
+   */
+  reprocessRelatorioGestaoNutricionalLotes(
+    options: ReprocessRelatorioGestaoNutricionalLotesOptions
   ): Promise<RelatorioGestaoNutricionalLoteResult>
 
   // Endpoints adicionais.
