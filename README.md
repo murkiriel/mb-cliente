@@ -679,6 +679,8 @@ await mb.erp.estoque.getRelatorioGestaoNutricionalLote({ propertyId, date: '2026
 // GRAVA num cache compartilhado: o resultado substitui o cache inteiro da fazenda e
 // muda a tela de todos os usuários. Leva minutos e falha com frequência. Também
 // seleciona a fazenda na seção exclusiva. Ver docs/api.md antes de usar.
+// Nos três recálculos, exibirMediaAcumulada (padrão false) é a opção "exibir média
+// acumulada" da tela: o relatório que fica no cache, para todos, sai com ela.
 await mb.erp.estoque.reprocessRelatorioGestaoNutricionalLinha({
   propertyId,
   date: '2026-06-29',

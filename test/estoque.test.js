@@ -146,6 +146,14 @@ describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLinha', () => {
     })
   })
 
+  it('com exibirMediaAcumulada, o corpo leva a média acumulada marcada', async () => {
+    const { client, estoque } = setup()
+    await estoque.reprocessRelatorioGestaoNutricionalLinha({ ...base, exibirMediaAcumulada: true })
+    const body = client.post.mock.calls[0][1]
+    expect(body.exibir_media_acumulada).toBe(true)
+    expect(body).not.toHaveProperty('exibirMediaAcumulada')
+  })
+
   it('linha dentro de allowedLines segue, e allowedLines não vai no corpo', async () => {
     const { client, estoque } = setup()
     await estoque.reprocessRelatorioGestaoNutricionalLinha({ ...base, allowedLines: [10, 11] })
@@ -163,6 +171,8 @@ describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLinha', () => {
     ['timeoutMs inválido', { ...base, timeoutMs: 0 }, 'timeoutMs'],
     ['linha fora de allowedLines', { ...base, allowedLines: [12] }, 'linhaConfinamento'],
     ['allowedLines vazia', { ...base, allowedLines: [] }, 'allowedLines'],
+    ['média acumulada em texto', { ...base, exibirMediaAcumulada: 'sim' }, 'exibirMediaAcumulada'],
+    ['média acumulada nula', { ...base, exibirMediaAcumulada: null }, 'exibirMediaAcumulada'],
   ])('%s → ValidationError antes de qualquer chamada', async (_caso, options, field) => {
     const { client, auth, estoque } = setup()
     const err = await estoque.reprocessRelatorioGestaoNutricionalLinha(options).catch((e) => e)
@@ -240,6 +250,7 @@ describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLote', () => {
     ['allowedLines vazia', { allowedLines: [] }, 'allowedLines'],
     ['allowedLines que não é lista', { allowedLines: 11 }, 'allowedLines'],
     ['allowedLines com id inválido', { allowedLines: [11, 0] }, 'allowedLines'],
+    ['média acumulada em número', { exibirMediaAcumulada: 1 }, 'exibirMediaAcumulada'],
   ])('%s → ValidationError antes de qualquer chamada', async (_caso, change, field) => {
     const { client, auth, estoque } = setup()
     const err = await estoque
@@ -249,6 +260,17 @@ describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLote', () => {
     expect(err.field).toBe(field)
     expect(auth.withProperty).not.toHaveBeenCalled()
     expect(client.post).not.toHaveBeenCalled()
+  })
+
+  it('repassa exibirMediaAcumulada: o corpo leva a média acumulada marcada', async () => {
+    const { client, estoque } = setup()
+    await estoque.reprocessRelatorioGestaoNutricionalLote({ ...base, exibirMediaAcumulada: true })
+    await estoque.reprocessRelatorioGestaoNutricionalLotes({
+      ...base,
+      lotesConfinamento: [67, 68],
+      exibirMediaAcumulada: true,
+    })
+    expect(client.post.mock.calls.map((c) => c[1].exibir_media_acumulada)).toEqual([true, true])
   })
 
   it('sem argumentos → ValidationError', async () => {
@@ -331,6 +353,7 @@ describe('EstoqueErp.reprocessRelatorioGestaoNutricionalLotes', () => {
     ['timeoutMs inválido', { timeoutMs: 0 }, 'timeoutMs'],
     ['linha fora de allowedLines', { allowedLines: [12, 13] }, 'linhaConfinamento'],
     ['allowedLines vazia', { allowedLines: [] }, 'allowedLines'],
+    ['média acumulada em texto', { exibirMediaAcumulada: 'true' }, 'exibirMediaAcumulada'],
   ])('%s → ValidationError antes de qualquer chamada', async (_caso, change, field) => {
     const { client, auth, estoque } = setup()
     const err = await estoque

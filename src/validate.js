@@ -1,4 +1,4 @@
-// Validações de opção numérica compartilhadas (interno do SDK — fora do mapa
+// Validações de opção compartilhadas (interno do SDK — fora do mapa
 // de exports). Mensagem e campos field/received iguais em todo lugar, para
 // quem trata o ValidationError não depender de qual módulo recusou.
 import { ValidationError } from './errors.js'
@@ -18,6 +18,12 @@ export function checkNonNegative(value, field) {
       field,
       received: value,
     })
+  }
+}
+
+export function checkBoolean(value, field) {
+  if (typeof value !== 'boolean') {
+    throw new ValidationError(`${field} deve ser true ou false`, { field, received: value })
   }
 }
 

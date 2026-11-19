@@ -6,6 +6,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-19
+
+### Adicionado
+
+- `exibirMediaAcumulada` (booleano, padrão `false`) em `erp.estoque.reprocessRelatorioGestaoNutricionalLinha()`, `…Lote()` e `…Lotes()`: a opção "exibir média acumulada" da tela, enviada como `exibir_media_acumulada`. O relatório que fica no cache sai com ela, como a tela o gera. Um valor que não seja booleano lança `ValidationError` antes de qualquer chamada. Até a 0.4.0, o corpo mandava sempre `false`.
+
+### Alterado
+
+- A documentação e a mensagem de `allowedLines` não falam mais em "só linhas de confinamento": o cliente não sabe o tipo da linha, e quem chama decide quais linhas libera para o recálculo. O comportamento é o mesmo.
+
 ## [0.4.0] - 2026-11-03
 
 ### Adicionado
@@ -55,5 +65,8 @@ Primeira versão pública. Distribuída pelo GitHub (`npm install github:Murkiri
 - `erp.animais.getConfinamento(params)`: listagem dos lotes de confinamento por fazenda, que respondia HTTP 500 e voltou a funcionar (sonda de 2026-10-29); `from`/`to` filtram pela abertura do lote (`data_abertura`).
 - Declarações TypeScript completas na raiz e nos subpaths `/errors`, `/constants`, `/helpers` e `/parsers`.
 
+[0.5.0]: https://github.com/Murkiriel/mb-cliente/releases/tag/v0.5.0
+[0.4.0]: https://github.com/Murkiriel/mb-cliente/releases/tag/v0.4.0
+[0.3.0]: https://github.com/Murkiriel/mb-cliente/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Murkiriel/mb-cliente/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Murkiriel/mb-cliente/releases/tag/v0.1.0

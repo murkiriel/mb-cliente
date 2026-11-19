@@ -81,6 +81,7 @@ async function smoke() {
     date: '2026-01-01',
     loteConfinamento: 2,
     linhaConfinamento: 3,
+    exibirMediaAcumulada: false,
     timeoutMs: 300_000,
   })
   recalculated.localidades
@@ -89,6 +90,7 @@ async function smoke() {
     date: '2026-01-01',
     linhaConfinamento: 3,
     allowedLines: [3],
+    exibirMediaAcumulada: true,
   })
   recalculatedLine.filtro
   const recalculatedGroup = await mb.erp.estoque.reprocessRelatorioGestaoNutricionalLotes({
@@ -97,6 +99,7 @@ async function smoke() {
     lotesConfinamento: [2, 4],
     linhaConfinamento: 3,
     allowedLines: [3],
+    exibirMediaAcumulada: true,
   })
   recalculatedGroup.localidades
   await mb.raw.post('/x/', {}, { timeoutMs: 1000 })

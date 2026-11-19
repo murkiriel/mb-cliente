@@ -1034,10 +1034,12 @@ export interface ReprocessRelatorioGestaoNutricionalLinhaOptions {
   propertyId: number
   /** YYYY-MM-DD. Diferente da consulta, o recálculo respeita a data. */
   date: string
-  /** A linha de confinamento. Nunca uma linha de pasto: o recálculo em pasto é proibido, e o cliente não tem como saber o tipo da linha. */
+  /** A linha de confinamento. O cliente não sabe o tipo da linha: quem chama decide quais libera em `allowedLines`. */
   linhaConfinamento: number
-  /** Ids das linhas de confinamento da fazenda: quando passado, `linhaConfinamento` fora da lista lança ValidationError antes de qualquer chamada. */
+  /** Ids das linhas que quem chama libera para o recálculo: quando passado, `linhaConfinamento` fora da lista lança ValidationError antes de qualquer chamada. */
   allowedLines?: number[]
+  /** A opção "exibir média acumulada" da tela: o relatório que fica no cache sai com ela. Padrão false. */
+  exibirMediaAcumulada?: boolean
   /** Prazo só desta chamada. Padrão 600000 (10 min). */
   timeoutMs?: number
   signal?: AbortSignal
@@ -1050,10 +1052,12 @@ export interface ReprocessRelatorioGestaoNutricionalLoteOptions {
   date: string
   /** Um lote de confinamento. Lista não é aceita: para mais de um curral, use o recálculo por linha. */
   loteConfinamento: number
-  /** A linha de confinamento do mesmo curral. Nunca uma linha de pasto: o recálculo em pasto é proibido, e o cliente não tem como saber o tipo da linha. */
+  /** A linha de confinamento do mesmo curral. O cliente não sabe o tipo da linha: quem chama decide quais libera em `allowedLines`. */
   linhaConfinamento: number
-  /** Ids das linhas de confinamento da fazenda: quando passado, `linhaConfinamento` fora da lista lança ValidationError antes de qualquer chamada. */
+  /** Ids das linhas que quem chama libera para o recálculo: quando passado, `linhaConfinamento` fora da lista lança ValidationError antes de qualquer chamada. */
   allowedLines?: number[]
+  /** A opção "exibir média acumulada" da tela: o relatório que fica no cache sai com ela. Padrão false. */
+  exibirMediaAcumulada?: boolean
   /** Prazo só desta chamada. Padrão 600000 (10 min). */
   timeoutMs?: number
   signal?: AbortSignal
@@ -1066,10 +1070,12 @@ export interface ReprocessRelatorioGestaoNutricionalLotesOptions {
   date: string
   /** Lista não vazia de lotes de confinamento (inteiros positivos, sem repetidos), todos da mesma linha. */
   lotesConfinamento: number[]
-  /** A linha de confinamento dos currais. Nunca uma linha de pasto: o recálculo em pasto é proibido, e o cliente não tem como saber o tipo da linha. */
+  /** A linha de confinamento dos currais. O cliente não sabe o tipo da linha: quem chama decide quais libera em `allowedLines`. */
   linhaConfinamento: number
-  /** Ids das linhas de confinamento da fazenda: quando passado, `linhaConfinamento` fora da lista lança ValidationError antes de qualquer chamada. */
+  /** Ids das linhas que quem chama libera para o recálculo: quando passado, `linhaConfinamento` fora da lista lança ValidationError antes de qualquer chamada. */
   allowedLines?: number[]
+  /** A opção "exibir média acumulada" da tela: o relatório que fica no cache sai com ela. Padrão false. */
+  exibirMediaAcumulada?: boolean
   /** Prazo só desta chamada. Padrão 600000 (10 min). */
   timeoutMs?: number
   signal?: AbortSignal
@@ -1244,8 +1250,8 @@ export interface EstoqueErp {
    * fazenda e muda a tela de Gestão Nutricional de todos os usuários. Lento (minutos) e
    * instável: o servidor costuma cortar a consulta por volta de 300 s. TimeoutError/NetworkError
    * trazem `mayHaveSucceeded: true`. Não repita em massa.
-   * Só para linhas de confinamento (em pasto é proibido); passe `allowedLines` para o cliente recusar as outras.
-   * @throws {ValidationError} sem propertyId ou linha (inteiros positivos), com data inválida ou com a linha fora de `allowedLines`.
+   * O cliente não sabe o tipo da linha: passe `allowedLines` com as linhas liberadas para ele recusar as outras.
+   * @throws {ValidationError} sem propertyId ou linha (inteiros positivos), com data inválida, com a linha fora de `allowedLines` ou com `exibirMediaAcumulada` que não seja booleano.
    */
   reprocessRelatorioGestaoNutricionalLinha(
     options: ReprocessRelatorioGestaoNutricionalLinhaOptions
@@ -1258,8 +1264,8 @@ export interface EstoqueErp {
    * fazenda e muda a tela de Gestão Nutricional de todos os usuários. Lento (1,5 a 5 min) e instável: o servidor
    * costuma cortar a consulta por volta de 300 s. TimeoutError/NetworkError trazem
    * `mayHaveSucceeded: true`. Não repita em massa.
-   * Só para linhas de confinamento (em pasto é proibido); passe `allowedLines` para o cliente recusar as outras.
-   * @throws {ValidationError} sem propertyId, lote ou linha (inteiros positivos), com data inválida ou com a linha fora de `allowedLines`.
+   * O cliente não sabe o tipo da linha: passe `allowedLines` com as linhas liberadas para ele recusar as outras.
+   * @throws {ValidationError} sem propertyId, lote ou linha (inteiros positivos), com data inválida, com a linha fora de `allowedLines` ou com `exibirMediaAcumulada` que não seja booleano.
    */
   reprocessRelatorioGestaoNutricionalLote(
     options: ReprocessRelatorioGestaoNutricionalLoteOptions
@@ -1271,8 +1277,8 @@ export interface EstoqueErp {
    * fazenda e muda a tela de Gestão Nutricional de todos os usuários. Lento e instável: o
    * servidor costuma cortar a consulta por volta de 300 s. TimeoutError/NetworkError trazem
    * `mayHaveSucceeded: true`. Não repita em massa.
-   * Só para linhas de confinamento (em pasto é proibido); passe `allowedLines` para o cliente recusar as outras.
-   * @throws {ValidationError} sem propertyId ou linha (inteiros positivos), com a lista de lotes vazia, com id inválido ou repetido, com data inválida ou com a linha fora de `allowedLines`.
+   * O cliente não sabe o tipo da linha: passe `allowedLines` com as linhas liberadas para ele recusar as outras.
+   * @throws {ValidationError} sem propertyId ou linha (inteiros positivos), com a lista de lotes vazia, com id inválido ou repetido, com data inválida, com a linha fora de `allowedLines` ou com `exibirMediaAcumulada` que não seja booleano.
    */
   reprocessRelatorioGestaoNutricionalLotes(
     options: ReprocessRelatorioGestaoNutricionalLotesOptions

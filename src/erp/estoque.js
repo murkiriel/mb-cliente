@@ -1,7 +1,7 @@
 import { ERP_SLUGS } from '../constants.js'
 import { EndpointUnavailableError, ValidationError } from '../errors.js'
 import { isoToUtc } from '../dates.js'
-import { checkPositiveInt, checkTimeout } from '../validate.js'
+import { checkBoolean, checkPositiveInt, checkTimeout } from '../validate.js'
 import { atLeastInstance, callOptions } from '../callOptions.js'
 
 // Prazo padrão do recálculo: o servidor leva de 1,5 a 5 minutos e costuma
@@ -11,8 +11,8 @@ const REPROCESS_TIMEOUT_MS = 600_000
 // do MBWEB manda a data.
 const BRASILIA_MIDNIGHT_MS = 3 * 60 * 60 * 1000
 
-// allowedLines: lista não vazia de ids de linhas de confinamento; a linha
-// pedida tem de estar nela.
+// allowedLines: lista não vazia de ids das linhas que quem chama libera para o
+// recálculo; a linha pedida tem de estar nela.
 function checkAllowedLine(line, allowedLines) {
   if (!Array.isArray(allowedLines) || allowedLines.length === 0) {
     throw new ValidationError('allowedLines deve ser uma lista não vazia de ids de linha', {
@@ -23,8 +23,8 @@ function checkAllowedLine(line, allowedLines) {
   for (const id of allowedLines) checkPositiveInt(id, 'allowedLines')
   if (!allowedLines.includes(line)) {
     throw new ValidationError(
-      `linhaConfinamento ${line} fora de allowedLines: o recálculo só vale para linhas de ` +
-        'confinamento (recalcular uma linha de pasto é proibido)',
+      `linhaConfinamento ${line} fora de allowedLines: o recálculo só vale para as linhas ` +
+        'liberadas por quem chama',
       { field: 'linhaConfinamento', received: line }
     )
   }
@@ -47,8 +47,10 @@ function checkLotes(lotes) {
   }
 }
 
-// Corpo do recálculo, igual ao da tela do MBWEB.
-function reprocessBody({ propertyId, date, lotes, line }) {
+// Corpo do recálculo, igual ao da tela do MBWEB. mediaAcumulada é a opção "exibir
+// média acumulada" da tela (padrão false), validada aqui para os três recálculos.
+function reprocessBody({ propertyId, date, lotes, line, mediaAcumulada = false }) {
+  checkBoolean(mediaAcumulada, 'exibirMediaAcumulada')
   const midnight = isoToUtc(date, 'date') + BRASILIA_MIDNIGHT_MS
   return {
     data: new Date(midnight).toISOString(),
@@ -59,7 +61,7 @@ function reprocessBody({ propertyId, date, lotes, line }) {
     produtos_texto: [],
     lotes_confinamento: lotes,
     linhas_confinamento: [line],
-    exibir_media_acumulada: false,
+    exibir_media_acumulada: mediaAcumulada,
     lotes_confinamento_texto: [],
     linhas_confinamento_texto: [],
   }
@@ -338,9 +340,12 @@ export class EstoqueErp {
   // aplicado. Não repita em massa: quem chama decide quantos recálculos faz e com
   // que intervalo.
   //
-  // Só vale para linhas de CONFINAMENTO: recalcular uma linha de pasto é proibido, e
-  // o cliente não tem como saber o tipo da linha. Quem tem a lista das linhas de
-  // confinamento passa allowedLines, e o método recusa qualquer outra antes de chamar.
+  // O cliente não tem como saber o tipo da linha (confinamento ou pasto): quem chama
+  // decide quais linhas libera e passa allowedLines, e o método recusa qualquer outra
+  // antes de chamar.
+  //
+  // exibirMediaAcumulada é a opção "exibir média acumulada" da tela (padrão false): o
+  // relatório que fica no cache sai com ela, como a tela o gera.
   //
   // A fazenda é selecionada na seção exclusiva da fila, que fica ocupada durante
   // todo o recálculo (outras trocas de fazenda desta instância esperam).
@@ -349,13 +354,20 @@ export class EstoqueErp {
     date,
     linhaConfinamento,
     allowedLines,
+    exibirMediaAcumulada,
     timeoutMs = atLeastInstance(REPROCESS_TIMEOUT_MS, this.#client),
     signal,
   } = {}) {
     checkPositiveInt(propertyId, 'propertyId')
     checkPositiveInt(linhaConfinamento, 'linhaConfinamento')
     if (allowedLines !== undefined) checkAllowedLine(linhaConfinamento, allowedLines)
-    const body = reprocessBody({ propertyId, date, lotes: [], line: linhaConfinamento })
+    const body = reprocessBody({
+      propertyId,
+      date,
+      lotes: [],
+      line: linhaConfinamento,
+      mediaAcumulada: exibirMediaAcumulada,
+    })
     return this.#postReport(propertyId, body, { timeoutMs, signal })
   }
 
@@ -369,6 +381,7 @@ export class EstoqueErp {
     loteConfinamento,
     linhaConfinamento,
     allowedLines,
+    exibirMediaAcumulada,
     timeoutMs,
     signal,
   } = {}) {
@@ -381,6 +394,7 @@ export class EstoqueErp {
       lotesConfinamento: [loteConfinamento],
       linhaConfinamento,
       allowedLines,
+      exibirMediaAcumulada,
       timeoutMs,
       signal,
     })
@@ -397,6 +411,7 @@ export class EstoqueErp {
     lotesConfinamento,
     linhaConfinamento,
     allowedLines,
+    exibirMediaAcumulada,
     timeoutMs = atLeastInstance(REPROCESS_TIMEOUT_MS, this.#client),
     signal,
   } = {}) {
@@ -409,6 +424,7 @@ export class EstoqueErp {
       date,
       lotes: lotesConfinamento,
       line: linhaConfinamento,
+      mediaAcumulada: exibirMediaAcumulada,
     })
     return this.#postReport(propertyId, body, { timeoutMs, signal })
   }

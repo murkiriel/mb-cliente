@@ -1128,20 +1128,21 @@ Endpoint adicional, fora do manual oficial: `POST /producaopasto/relatorio-gesta
 >
 > **Linhas de subtotal:** registros com `media: true` são médias do grupo, não currais — exclua-os ao somar. Há também linhas sem `localidade_id`.
 
-### `reprocessRelatorioGestaoNutricionalLinha({ propertyId, date, linhaConfinamento, allowedLines?, timeoutMs?, signal? })` ⚠️ (escrita)
+### `reprocessRelatorioGestaoNutricionalLinha({ propertyId, date, linhaConfinamento, allowedLines?, exibirMediaAcumulada?, timeoutMs?, signal? })` ⚠️ (escrita)
 
 Mesmo endpoint, com `reprocessar: true` e a lista de lotes vazia, como a tela envia: o servidor **recalcula** o relatório para `date` e devolve todos os currais da linha, com o `data_relatorio` pedido. É o recálculo a preferir.
 
-| Parâmetro           | Tipo          | Obrigatório | Descrição                                                                                                                 |
-| ------------------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `propertyId`        | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção. |
-| `date`              | `string`      | ✅          | `YYYY-MM-DD`. Enviada como `data`, na meia-noite de Brasília, como a tela do MBWEB faz.                                   |
-| `linhaConfinamento` | `number`      | ✅          | A linha de confinamento. Nunca uma linha de pasto (ver abaixo).                                                           |
-| `allowedLines`      | `number[]`    | —           | Ids das linhas de confinamento da fazenda. Quando passado, uma `linhaConfinamento` fora da lista é recusada.              |
-| `timeoutMs`         | `number`      | —           | Prazo só desta chamada. Padrão `600000` (10 min).                                                                         |
-| `signal`            | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                  |
+| Parâmetro              | Tipo          | Obrigatório | Descrição                                                                                                                                                                                                                                     |
+| ---------------------- | ------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `propertyId`           | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção.                                                                                                                     |
+| `date`                 | `string`      | ✅          | `YYYY-MM-DD`. Enviada como `data`, na meia-noite de Brasília, como a tela do MBWEB faz.                                                                                                                                                       |
+| `linhaConfinamento`    | `number`      | ✅          | A linha de confinamento. O cliente não sabe o tipo da linha (ver abaixo).                                                                                                                                                                     |
+| `allowedLines`         | `number[]`    | —           | Ids das linhas que quem chama libera para o recálculo. Quando passado, uma `linhaConfinamento` fora da lista é recusada.                                                                                                                      |
+| `exibirMediaAcumulada` | `boolean`     | —           | A opção "exibir média acumulada" da tela, enviada como `exibir_media_acumulada`. O relatório que fica no cache sai com ela, e o `filtro` da resposta (e da consulta seguinte) traz a opção usada em `exibir_media_acumulada`. Padrão `false`. |
+| `timeoutMs`            | `number`      | —           | Prazo só desta chamada. Padrão `600000` (10 min).                                                                                                                                                                                             |
+| `signal`               | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                                                                                                                                      |
 
-**Lança:** `ValidationError` sem `propertyId` ou linha (inteiros positivos), com `date` inválida, com `timeoutMs` inválido ou com a linha fora de `allowedLines` — antes de qualquer chamada.
+**Lança:** `ValidationError` sem `propertyId` ou linha (inteiros positivos), com `date` inválida, com `timeoutMs` inválido, com a linha fora de `allowedLines` ou com `exibirMediaAcumulada` que não seja booleano — antes de qualquer chamada.
 
 **Retorno:** o mesmo de `getRelatorioGestaoNutricionalLote`, com os currais da linha. Guarde a resposta: a próxima busca de qualquer pessoa troca o cache.
 
@@ -1149,25 +1150,26 @@ Mesmo endpoint, com `reprocessar: true` e a lista de lotes vazia, como a tela en
 >
 > ⚠️ **Lento e instável.** Leva minutos, e o servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`). Uma linha com muitos currais pode passar desse limite. O corte é da conexão, não do cálculo: o servidor costuma terminar depois, em poucos minutos, e o resultado aparece na consulta normal, com o `filtro` da linha e da data pedidas. Antes de repetir, consulte. Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa: o cliente não espaça chamadas, e decidir quantos recálculos fazer e com que intervalo é responsabilidade de quem chama.
 >
-> ⚠️ **Só linhas de confinamento.** Recalcular uma linha de pasto é proibido. O cliente não tem como saber se uma linha é de pasto: quem chama tem de saber, e pode passar `allowedLines` (as linhas de confinamento da fazenda) para o método recusar as outras.
+> ⚠️ **Só as linhas liberadas por quem chama.** O cliente não tem como saber se uma linha é de confinamento ou de pasto: quem chama decide quais linhas recalcula, e pode passar `allowedLines` (as linhas liberadas) para o método recusar as outras.
 >
 > A fila de fazenda fica ocupada durante todo o recálculo: outras trocas de fazenda da mesma instância esperam.
 
-### `reprocessRelatorioGestaoNutricionalLote({ propertyId, date, loteConfinamento, linhaConfinamento, allowedLines?, timeoutMs?, signal? })` ⚠️ (escrita)
+### `reprocessRelatorioGestaoNutricionalLote({ propertyId, date, loteConfinamento, linhaConfinamento, allowedLines?, exibirMediaAcumulada?, timeoutMs?, signal? })` ⚠️ (escrita)
 
 Mesmo endpoint, com `reprocessar: true`: o servidor **recalcula** o relatório para `date`, num curral só. Diferente da consulta, o recálculo respeita a data e devolve o `data_relatorio` pedido.
 
-| Parâmetro           | Tipo          | Obrigatório | Descrição                                                                                                                 |
-| ------------------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `propertyId`        | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção. |
-| `date`              | `string`      | ✅          | `YYYY-MM-DD`. Enviada como `data`, na meia-noite de Brasília, como a tela do MBWEB faz.                                   |
-| `loteConfinamento`  | `number`      | ✅          | **Um** lote de confinamento. Lista não é aceita.                                                                          |
-| `linhaConfinamento` | `number`      | ✅          | A linha de confinamento do mesmo curral. Nunca uma linha de pasto (ver abaixo).                                           |
-| `allowedLines`      | `number[]`    | —           | Ids das linhas de confinamento da fazenda. Quando passado, uma `linhaConfinamento` fora da lista é recusada.              |
-| `timeoutMs`         | `number`      | —           | Prazo só desta chamada. Padrão `600000` (10 min).                                                                         |
-| `signal`            | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                  |
+| Parâmetro              | Tipo          | Obrigatório | Descrição                                                                                                                                                                                                                                     |
+| ---------------------- | ------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `propertyId`           | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção.                                                                                                                     |
+| `date`                 | `string`      | ✅          | `YYYY-MM-DD`. Enviada como `data`, na meia-noite de Brasília, como a tela do MBWEB faz.                                                                                                                                                       |
+| `loteConfinamento`     | `number`      | ✅          | **Um** lote de confinamento. Lista não é aceita.                                                                                                                                                                                              |
+| `linhaConfinamento`    | `number`      | ✅          | A linha de confinamento do mesmo curral. O cliente não sabe o tipo da linha (ver abaixo).                                                                                                                                                     |
+| `allowedLines`         | `number[]`    | —           | Ids das linhas que quem chama libera para o recálculo. Quando passado, uma `linhaConfinamento` fora da lista é recusada.                                                                                                                      |
+| `exibirMediaAcumulada` | `boolean`     | —           | A opção "exibir média acumulada" da tela, enviada como `exibir_media_acumulada`. O relatório que fica no cache sai com ela, e o `filtro` da resposta (e da consulta seguinte) traz a opção usada em `exibir_media_acumulada`. Padrão `false`. |
+| `timeoutMs`            | `number`      | —           | Prazo só desta chamada. Padrão `600000` (10 min).                                                                                                                                                                                             |
+| `signal`               | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                                                                                                                                      |
 
-**Lança:** `ValidationError` sem `propertyId`, lote ou linha (inteiros positivos), com `date` inválida, com `timeoutMs` inválido ou com a linha fora de `allowedLines` — antes de qualquer chamada.
+**Lança:** `ValidationError` sem `propertyId`, lote ou linha (inteiros positivos), com `date` inválida, com `timeoutMs` inválido, com a linha fora de `allowedLines` ou com `exibirMediaAcumulada` que não seja booleano — antes de qualquer chamada.
 
 **Retorno:** o mesmo de `getRelatorioGestaoNutricionalLote`, com o curral recalculado.
 
@@ -1175,25 +1177,26 @@ Mesmo endpoint, com `reprocessar: true`: o servidor **recalcula** o relatório p
 >
 > ⚠️ **Lento e instável.** Leva de 1,5 a 5 minutos, e o servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`). Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa: o cliente não espaça chamadas, e decidir quantos recálculos fazer e com que intervalo é responsabilidade de quem chama.
 >
-> ⚠️ **Só linhas de confinamento.** Recalcular uma linha de pasto é proibido. O cliente não tem como saber se uma linha é de pasto: quem chama tem de saber, e pode passar `allowedLines` (as linhas de confinamento da fazenda) para o método recusar as outras.
+> ⚠️ **Só as linhas liberadas por quem chama.** O cliente não tem como saber se uma linha é de confinamento ou de pasto: quem chama decide quais linhas recalcula, e pode passar `allowedLines` (as linhas liberadas) para o método recusar as outras.
 >
 > A fila de fazenda fica ocupada durante todo o recálculo: outras trocas de fazenda da mesma instância esperam.
 
-### `reprocessRelatorioGestaoNutricionalLotes({ propertyId, date, lotesConfinamento, linhaConfinamento, allowedLines?, timeoutMs?, signal? })` ⚠️ (escrita)
+### `reprocessRelatorioGestaoNutricionalLotes({ propertyId, date, lotesConfinamento, linhaConfinamento, allowedLines?, exibirMediaAcumulada?, timeoutMs?, signal? })` ⚠️ (escrita)
 
 Mesmo endpoint, com `reprocessar: true` e uma lista de lotes (1 ou mais) de uma linha: o servidor **recalcula** o relatório para `date` só para esses currais e devolve o `data_relatorio` pedido. Serve para dividir uma linha cujo recálculo inteiro não termina de uma vez: o custo de cada chamada é quase fixo, então um grupo menor acaba antes.
 
-| Parâmetro           | Tipo          | Obrigatório | Descrição                                                                                                                 |
-| ------------------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `propertyId`        | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção. |
-| `date`              | `string`      | ✅          | `YYYY-MM-DD`. Enviada como `data`, na meia-noite de Brasília, como a tela do MBWEB faz.                                   |
-| `lotesConfinamento` | `number[]`    | ✅          | Lista não vazia de lotes de confinamento (inteiros positivos, sem repetidos), todos da `linhaConfinamento`.               |
-| `linhaConfinamento` | `number`      | ✅          | A linha de confinamento dos currais. Nunca uma linha de pasto (ver abaixo).                                               |
-| `allowedLines`      | `number[]`    | —           | Ids das linhas de confinamento da fazenda. Quando passado, uma `linhaConfinamento` fora da lista é recusada.              |
-| `timeoutMs`         | `number`      | —           | Prazo só desta chamada. Padrão `600000` (10 min).                                                                         |
-| `signal`            | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                  |
+| Parâmetro              | Tipo          | Obrigatório | Descrição                                                                                                                                                                                                                                     |
+| ---------------------- | ------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `propertyId`           | `number`      | ✅          | Id da fazenda, enviado como `propriedade`. O método seleciona essa fazenda na fila exclusiva e faz o POST na mesma seção.                                                                                                                     |
+| `date`                 | `string`      | ✅          | `YYYY-MM-DD`. Enviada como `data`, na meia-noite de Brasília, como a tela do MBWEB faz.                                                                                                                                                       |
+| `lotesConfinamento`    | `number[]`    | ✅          | Lista não vazia de lotes de confinamento (inteiros positivos, sem repetidos), todos da `linhaConfinamento`.                                                                                                                                   |
+| `linhaConfinamento`    | `number`      | ✅          | A linha de confinamento dos currais. O cliente não sabe o tipo da linha (ver abaixo).                                                                                                                                                         |
+| `allowedLines`         | `number[]`    | —           | Ids das linhas que quem chama libera para o recálculo. Quando passado, uma `linhaConfinamento` fora da lista é recusada.                                                                                                                      |
+| `exibirMediaAcumulada` | `boolean`     | —           | A opção "exibir média acumulada" da tela, enviada como `exibir_media_acumulada`. O relatório que fica no cache sai com ela, e o `filtro` da resposta (e da consulta seguinte) traz a opção usada em `exibir_media_acumulada`. Padrão `false`. |
+| `timeoutMs`            | `number`      | —           | Prazo só desta chamada. Padrão `600000` (10 min).                                                                                                                                                                                             |
+| `signal`               | `AbortSignal` | —           | Cancela só esta chamada.                                                                                                                                                                                                                      |
 
-**Lança:** `ValidationError` sem `propertyId` ou linha (inteiros positivos), com a lista de lotes vazia, com id inválido ou repetido, com `date` inválida, com `timeoutMs` inválido ou com a linha fora de `allowedLines` — antes de qualquer chamada.
+**Lança:** `ValidationError` sem `propertyId` ou linha (inteiros positivos), com a lista de lotes vazia, com id inválido ou repetido, com `date` inválida, com `timeoutMs` inválido, com a linha fora de `allowedLines` ou com `exibirMediaAcumulada` que não seja booleano — antes de qualquer chamada.
 
 **Retorno:** o mesmo de `getRelatorioGestaoNutricionalLote`, só com os currais pedidos.
 
@@ -1201,7 +1204,7 @@ Mesmo endpoint, com `reprocessar: true` e uma lista de lotes (1 ou mais) de uma 
 >
 > ⚠️ **Lento e instável.** O servidor costuma cortar a consulta por volta de 300 s (`TimeoutError`, `NetworkError` ou `ServerError`), e o corte é da conexão, não do cálculo. Como em toda escrita, `TimeoutError` e `NetworkError` trazem `mayHaveSucceeded: true`. Não repita em massa.
 >
-> ⚠️ **Só linhas de confinamento.** Recalcular uma linha de pasto é proibido. Quem chama tem de saber o tipo da linha, e pode passar `allowedLines` para o método recusar as outras.
+> ⚠️ **Só as linhas liberadas por quem chama.** O cliente não tem como saber o tipo da linha: quem chama decide quais linhas recalcula, e pode passar `allowedLines` para o método recusar as outras.
 >
 > A fila de fazenda fica ocupada durante todo o recálculo: outras trocas de fazenda da mesma instância esperam.
 
